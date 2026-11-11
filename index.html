@@ -3,56 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sistema de Visualização de Áudio</title>
+    <title>WaveCanvas Studio</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div id="app">
         <header>
-            <h1>Sistema de Visualização de Áudio</h1>
+            <div class="brand">
+                <h1>WaveCanvas <span>Studio</span></h1>
+                <p class="subtitle">Visualização de áudio em tempo real com Web Audio API &amp; Canvas</p>
+            </div>
+            <div class="header-status">
+                <span id="statusBadge" class="badge badge-idle">Parado</span>
+                <span id="fpsBadge" class="badge badge-muted" title="Frames por segundo / qualidade">-- FPS</span>
+            </div>
         </header>
-        
+
         <main>
+            <!-- controlos -->
             <section id="controls">
                 <div class="control-group">
                     <h3>Controlos de Áudio</h3>
-                    <button id="startMic" class="btn-primary">Iniciar Microfone</button>
-                    <button id="stopAudio" class="btn-secondary" disabled>Parar Áudio</button>
-                    <input type="file" id="audioFile" accept="audio/*">
+                    <div class="button-row">
+                        <button id="startMic" class="btn-primary">🎤 Iniciar Microfone</button>
+                    </div>
+                    <label class="file-input">
+                        <input type="file" id="audioFile" accept="audio/*,.wav">
+                        <span>Carregar ficheiro de áudio</span>
+                    </label>
+                    <div class="sample-row">
+                        <span class="hint">Exemplos:</span>
+                        <button class="btn-link" data-sample="sounds/sample2.wav">sample2.wav</button>
+                        <button class="btn-link" data-sample="sounds/suzumenotojimari.wav">suzumenotojimari.wav</button>
+                    </div>
+                    <div class="button-row">
+                        <button id="pauseAudio" class="btn-secondary" disabled>⏸ Pausar</button>
+                        <button id="stopAudio" class="btn-secondary" disabled>⏹ Parar Áudio</button>
+                    </div>
+                    <div class="inline-control">
+                        <label for="volume">Volume</label>
+                        <input type="range" id="volume" min="0" max="1" step="0.01" value="0.8">
+                    </div>
+                    <label class="checkbox"><input type="checkbox" id="loopAudio"> Repetir ficheiro</label>
                 </div>
-                
+
                 <div class="control-group">
                     <h3>Visualização</h3>
-                    <select id="visualizationType">
-                        <option value="spectrum">Espectro de Frequências</option>
-                        <option value="waveform">Forma de Onda</option>
-                        <option value="particles">Partículas</option>
-                    </select>
+                    <select id="visualizationType"></select>
+                    <div id="visualizationPreviews" class="preview-grid"></div>
                 </div>
-                
+
+                <div class="control-group">
+                    <h3>Presets</h3>
+                    <div id="presetList" class="preset-list"></div>
+                    <div class="preset-save">
+                        <input type="text" id="presetName" placeholder="Nome do preset" maxlength="40">
+                        <button id="savePreset" class="btn-primary btn-small">Guardar</button>
+                    </div>
+                </div>
+
                 <div class="control-group">
                     <h3>Exportação</h3>
-                    <button id="exportPNG" class="btn-primary">Exportar PNG</button>
-                    <button id="exportJPEG" class="btn-primary">Exportar JPEG</button>
+                    <div class="button-row">
+                        <button id="exportPNG" class="btn-primary">Exportar PNG</button>
+                        <button id="exportJPEG" class="btn-primary">Exportar JPEG</button>
+                    </div>
+                    <div class="inline-control">
+                        <label for="jpegQuality">Qualidade JPEG <output id="jpegQualityValue">90%</output></label>
+                        <input type="range" id="jpegQuality" min="0.1" max="1" step="0.05" value="0.9">
+                    </div>
+                    <button id="captureScreenshot" class="btn-secondary btn-block">📸 Capturar screenshot (S)</button>
+                    <div id="screenshotGallery" class="gallery"></div>
+                </div>
+
+                <div class="control-group">
+                    <h3>Performance</h3>
+                    <select id="qualityMode">
+                        <option value="auto">Qualidade automática</option>
+                        <option value="high">Qualidade alta</option>
+                        <option value="low">Qualidade baixa</option>
+                    </select>
                 </div>
             </section>
-            
+
+            <!-- canvas -->
             <section id="visualization-area">
-                <canvas id="audioCanvas"></canvas>
+                <div class="canvas-wrapper" id="canvasWrapper">
+                    <canvas id="audioCanvas"></canvas>
+                    <button id="fullscreenBtn" class="canvas-button" title="Ecrã inteiro (F)">⛶</button>
+                </div>
+
                 <div id="audioInfo">
-                    <p id="audioStatus">Áudio: Parado</p>
-                    <p id="audioLevel">Nível: 0%</p>
+                    <div class="info-block">
+                        <p id="audioStatus">Áudio: Parado</p>
+                        <p id="audioDetails" class="hint">Inicie o microfone ou carregue um ficheiro WAV.</p>
+                    </div>
+                    <div class="info-block progress-block">
+                        <div class="progress"><div id="progressBar" class="progress-fill"></div></div>
+                        <p id="audioTime" class="hint">0:00 / 0:00</p>
+                    </div>
+                    <div class="info-block level-block">
+                        <p id="audioLevel">Nível: 0%</p>
+                        <div class="meter">
+                            <div id="levelBar" class="meter-fill"></div>
+                            <div id="peakMarker" class="meter-peak"></div>
+                        </div>
+                    </div>
                 </div>
             </section>
-            
+
+            <!-- propriedades -->
             <section id="properties-panel">
-                <h3>Propriedades da Visualização</h3>
+                <div class="panel-header">
+                    <h3>Propriedades da Visualização <span id="propertiesTitle" class="hint"></span></h3>
+                    <button id="resetProperties" class="btn-secondary btn-small">Repor valores</button>
+                </div>
                 <div id="properties-container">
                     <!-- Propriedades dinâmicas serão inseridas aqui -->
                 </div>
             </section>
         </main>
-        
+
+        <footer>
+            Atalhos: <kbd>1</kbd>–<kbd>4</kbd> visualização · <kbd>Espaço</kbd> pausar · <kbd>S</kbd> screenshot · <kbd>F</kbd> ecrã inteiro
+        </footer>
+
+        <div id="toast" class="toast hidden"></div>
+
         <div id="errorModal" class="modal hidden">
             <div class="modal-content">
                 <span class="close">&times;</span>
@@ -61,7 +138,18 @@
             </div>
         </div>
     </div>
-    
+
+    <!-- os scripts têm de ser carregados por esta ordem -->
+    <script src="js/AudioProcessor.js"></script>
+    <script src="js/AudioVisualization.js"></script>
+    <script src="js/visualizations/SpectrumVisualization.js"></script>
+    <script src="js/visualizations/WaveformVisualization.js"></script>
+    <script src="js/visualizations/ParticleVisualization.js"></script>
+    <script src="js/visualizations/CircularVisualization.js"></script>
+    <script src="js/VisualizationEngine.js"></script>
+    <script src="js/PresetManager.js"></script>
+    <script src="js/ExportManager.js"></script>
+    <script src="js/UIManager.js"></script>
     <script src="app.js"></script>
 </body>
 </html>
